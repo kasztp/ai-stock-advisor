@@ -1,0 +1,5 @@
+{
+  "name": "AI Stock Advisor",
+  "description": "An AI-assisted stock picking and portfolio advisory tool that provides in-depth analysis of stocks using growth and value investing principles, news sentiment, and technical indicators to offer buy/sell recommendations.",
+  "requestFramePermissions": []
+}
