@@ -1,8 +1,7 @@
 
 import React, { useState, useCallback, useEffect } from 'react';
 import { AnalysisResult } from './types';
-import { getStockAnalysis } from './services/geminiService';
-import { getHistoricalData, getStockFundamentals } from './services/stockService';
+import { getStockHistory, getStockFundamentals, getStockAnalysis } from './src/services/api';
 import Header from './components/Header';
 import StockInput from './components/StockInput';
 import AnalysisDashboard from './components/AnalysisDashboard';
@@ -14,7 +13,7 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [analyzingTicker, setAnalyzingTicker] = useState<string>('');
-  
+
   // Portfolio State
   const [portfolio, setPortfolio] = useState<AnalysisResult[]>([]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -38,7 +37,7 @@ const App: React.FC = () => {
 
   const addToPortfolio = (item: AnalysisResult) => {
     if (!portfolio.some(p => p.summary.ticker === item.summary.ticker)) {
-        setPortfolio([...portfolio, item]);
+      setPortfolio([...portfolio, item]);
     }
   };
 
@@ -51,41 +50,73 @@ const App: React.FC = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleAnalysis = useCallback(async (ticker: string) => {
+  const handleAnalysis = useCallback(async (ticker: string, includeSearch: boolean = false, model: string = 'gemini-2.5-flash-lite') => {
     setIsLoading(true);
     setError(null);
     setAnalysisResult(null);
     setAnalyzingTicker(ticker);
-    
+
     try {
       // Fetch Market Data (Chart) and Fundamentals (Stats) first
       const [historicalData, fundamentals] = await Promise.all([
-        getHistoricalData(ticker),
+        getStockHistory(ticker),
         getStockFundamentals(ticker)
       ]);
 
       // Pass fundamentals to Gemini to ensure consistent analysis
-      const aiResult = await getStockAnalysis(ticker, fundamentals);
+      const aiResult = await getStockAnalysis(ticker, fundamentals, includeSearch, model);
 
       // Construct Analyst Estimates if data is available
       let analystEstimates = undefined;
       if (fundamentals && fundamentals.targetMeanPrice) {
         analystEstimates = {
-            targetLow: fundamentals.targetLowPrice || 0,
-            targetHigh: fundamentals.targetHighPrice || 0,
-            targetMean: fundamentals.targetMeanPrice || 0,
-            consensus: fundamentals.recommendationKey || 'N/A',
-            numberOfAnalysts: fundamentals.numberOfAnalystOpinions || 0
+          targetLow: fundamentals.targetLowPrice || 0,
+          targetHigh: fundamentals.targetHighPrice || 0,
+          targetMean: fundamentals.targetMeanPrice || 0,
+          consensus: fundamentals.recommendationKey || 'N/A',
+          numberOfAnalysts: fundamentals.numberOfAnalystOpinions || 0
         };
       }
 
-      // Combine the results
+      // Combine the results with safe fallbacks to prevent crashes
       const finalResult: AnalysisResult = {
         ...aiResult,
+        summary: {
+          companyName: aiResult.summary?.companyName || fundamentals.longName || ticker,
+          ticker: aiResult.summary?.ticker || ticker,
+          currentPrice: aiResult.summary?.currentPrice || fundamentals.price || 0,
+          marketCap: aiResult.summary?.marketCap || `${(fundamentals.marketCap / 1e9).toFixed(2)} Billion`,
+          changePercent: aiResult.summary?.changePercent || 0,
+          website: aiResult.summary?.website || fundamentals.website
+        },
+        growthAnalysis: aiResult.growthAnalysis || {
+          revenueGrowth: { value: 'N/A', commentary: 'Data unavailable', rating: 'Fair' },
+          epsGrowth: { value: 'N/A', commentary: 'Data unavailable', rating: 'Fair' },
+          profitMargins: { value: 'N/A', commentary: 'Data unavailable', rating: 'Fair' },
+          roe: { value: 'N/A', commentary: 'Data unavailable', rating: 'Fair' }
+        },
+        valueAnalysis: aiResult.valueAnalysis || {
+          peRatio: { value: 'N/A', commentary: 'Data unavailable', rating: 'Fair' },
+          pbRatio: { value: 'N/A', commentary: 'Data unavailable', rating: 'Fair' },
+          dividendYield: { value: 'N/A', commentary: 'Data unavailable', rating: 'Fair' },
+          dcfAnalysis: { value: 'N/A', commentary: 'Data unavailable', rating: 'Fair' }
+        },
+        newsSentiment: aiResult.newsSentiment || {
+          overallSentiment: 'Neutral',
+          summary: 'No recent news sentiment available.',
+          articles: []
+        },
+        recommendation: aiResult.recommendation || {
+          finalVerdict: 'Hold',
+          confidenceScore: 0.5,
+          summary: 'Analysis pending or incomplete.',
+          entryPoint: 'N/A',
+          exitStrategy: 'N/A'
+        },
         historicalData: historicalData,
         chartSource: 'Yahoo Finance',
         analystEstimates: analystEstimates,
-        competitors: aiResult.competitors || [] // Ensure competitors array exists
+        competitors: aiResult.competitors || []
       };
 
       setAnalysisResult(finalResult);
@@ -97,16 +128,16 @@ const App: React.FC = () => {
     }
   }, []);
 
-  const isCurrentTickerSaved = analysisResult 
+  const isCurrentTickerSaved = analysisResult
     ? portfolio.some(p => p.summary.ticker === analysisResult.summary.ticker)
     : false;
 
   return (
     <div className="min-h-screen bg-gray-900 text-gray-200 font-sans">
       <Header onToggleSidebar={() => setIsSidebarOpen(prev => !prev)} />
-      
-      <PortfolioSidebar 
-        isOpen={isSidebarOpen} 
+
+      <PortfolioSidebar
+        isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
         portfolio={portfolio}
         onSelect={loadFromPortfolio}
@@ -119,11 +150,11 @@ const App: React.FC = () => {
           <p className="text-gray-400 mb-8">
             Enter a stock ticker to receive a comprehensive analysis based on growth, value, and news sentiment.
           </p>
-          <StockInput onAnalyze={handleAnalysis} isLoading={isLoading} />
+          <StockInput onAnalyze={(ticker, includeSearch, model) => handleAnalysis(ticker, includeSearch, model)} isLoading={isLoading} />
         </div>
 
         {isLoading && <Loader ticker={analyzingTicker} />}
-        
+
         {error && (
           <div className="mt-8 max-w-4xl mx-auto bg-red-900/50 border border-red-500 text-red-300 px-4 py-3 rounded-lg" role="alert">
             <strong className="font-bold">Error:</strong>
@@ -133,21 +164,21 @@ const App: React.FC = () => {
 
         {analysisResult && !isLoading && (
           <div className="mt-8">
-            <AnalysisDashboard 
-                data={analysisResult} 
-                onAddToPortfolio={addToPortfolio}
-                isSaved={isCurrentTickerSaved}
+            <AnalysisDashboard
+              data={analysisResult}
+              onAddToPortfolio={addToPortfolio}
+              isSaved={isCurrentTickerSaved}
             />
           </div>
         )}
 
         {!analysisResult && !isLoading && !error && (
-            <div className="mt-12 text-center text-gray-500">
-                <p>Analysis results will be displayed here.</p>
-                {portfolio.length > 0 && (
-                    <p className="text-sm mt-2 text-gray-600">Open the sidebar to view your saved portfolio.</p>
-                )}
-            </div>
+          <div className="mt-12 text-center text-gray-500">
+            <p>Analysis results will be displayed here.</p>
+            {portfolio.length > 0 && (
+              <p className="text-sm mt-2 text-gray-600">Open the sidebar to view your saved portfolio.</p>
+            )}
+          </div>
         )}
       </main>
     </div>

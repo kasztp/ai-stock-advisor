@@ -5,6 +5,7 @@ export interface StockSummary {
   currentPrice: number;
   marketCap: string;
   changePercent: number;
+  website?: string;
 }
 
 export interface Metric {
@@ -58,6 +59,28 @@ export interface Source {
 export interface HistoricalDataPoint {
   date: string;
   price: number;
+}
+
+export interface StockFundamentals {
+  price: number;
+  marketCap: number;
+  trailingPE: number;
+  forwardPE: number;
+  epsTrailingTwelveMonths: number;
+  priceToBook: number;
+  revenueGrowth: number;
+  profitMargins: number;
+  returnOnEquity: number;
+  dividendYield: number;
+  beta: number;
+  currency: string;
+  targetLowPrice?: number;
+  targetHighPrice?: number;
+  targetMeanPrice?: number;
+  recommendationKey?: string;
+  numberOfAnalystOpinions?: number;
+  longName?: string;
+  website?: string;
 }
 
 export interface AnalystEstimates {
