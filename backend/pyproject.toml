@@ -8,7 +8,7 @@ dependencies = [
     "fastapi>=0.121.3",
     "google-genai>=1.52.0",
     "pydantic>=2.12.4",
-    "python-dotenv>=1.2.1",
+    "python-dotenv>=1.2.2",
     "uvicorn>=0.38.0",
     "yfinance>=0.2.66",
 ]
